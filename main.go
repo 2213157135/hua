@@ -11,6 +11,8 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -25,127 +27,127 @@ var (
 	gdi32    = syscall.NewLazyDLL("gdi32.dll")
 	comdlg32 = syscall.NewLazyDLL("comdlg32.dll")
 
-	procCreateWindowExW      = user32.NewProc("CreateWindowExW")
-	procDefWindowProcW       = user32.NewProc("DefWindowProcW")
-	procRegisterClassExW     = user32.NewProc("RegisterClassExW")
-	procShowWindow           = user32.NewProc("ShowWindow")
-	procUpdateWindow         = user32.NewProc("UpdateWindow")
-	procGetMessageW          = user32.NewProc("GetMessageW")
-	procTranslateMessage     = user32.NewProc("TranslateMessage")
-	procDispatchMessageW     = user32.NewProc("DispatchMessageW")
-	procPostQuitMessage      = user32.NewProc("PostQuitMessage")
-	procSendMessageW         = user32.NewProc("SendMessageW")
-	procGetWindowTextLengthW = user32.NewProc("GetWindowTextLengthW")
-	procGetWindowTextW       = user32.NewProc("GetWindowTextW")
-	procMessageBoxW          = user32.NewProc("MessageBoxW")
-	procGetModuleHandleW     = kernel32.NewProc("GetModuleHandleW")
-	procCreateFontW          = gdi32.NewProc("CreateFontW")
-	procGetOpenFileNameW     = comdlg32.NewProc("GetOpenFileNameW")
-	procSetCursorPos         = user32.NewProc("SetCursorPos")
-	procGetCursorPos         = user32.NewProc("GetCursorPos")
-	procGetAsyncKeyState     = user32.NewProc("GetAsyncKeyState")
-	procMouseEvent           = user32.NewProc("mouse_event")
-	procLoadImageW           = user32.NewProc("LoadImageW")
-	procSetWindowPos         = user32.NewProc("SetWindowPos")
-	procInvalidateRect       = user32.NewProc("InvalidateRect")
-	procGetClientRect        = user32.NewProc("GetClientRect")
-	procClientToScreen       = user32.NewProc("ClientToScreen")
-	procDeleteObject         = gdi32.NewProc("DeleteObject")
-	procCreatePen            = gdi32.NewProc("CreatePen")
-	procCreateSolidBrush     = gdi32.NewProc("CreateSolidBrush")
-	procSelectObject         = gdi32.NewProc("SelectObject")
-	procRectangle            = gdi32.NewProc("Rectangle")
-	procBeginPaint           = user32.NewProc("BeginPaint")
-	procEndPaint             = user32.NewProc("EndPaint")
-	procFillRect             = user32.NewProc("FillRect")
-	procDestroyWindow        = user32.NewProc("DestroyWindow")
-	procGetSystemMetrics     = user32.NewProc("GetSystemMetrics")
-	procSetTimer             = user32.NewProc("SetTimer")
-	procKillTimer            = user32.NewProc("KillTimer")
-	procSetTextColor         = gdi32.NewProc("SetTextColor")
-	procTextOut              = gdi32.NewProc("TextOutW")
-	procCreateCompatibleDC   = gdi32.NewProc("CreateCompatibleDC")
-	procGetStockObject       = gdi32.NewProc("GetStockObject")
-	procDeleteDC             = gdi32.NewProc("DeleteDC")
-	procBitBlt               = gdi32.NewProc("BitBlt")
-	procGetDC                = user32.NewProc("GetDC")
-	procReleaseDC            = user32.NewProc("ReleaseDC")
-	procCreateCompatibleBitmap = gdi32.NewProc("CreateCompatibleBitmap")
-	procGetDesktopWindow     = user32.NewProc("GetDesktopWindow")
-	procStretchBlt           = gdi32.NewProc("StretchBlt")
-	procGetObject            = gdi32.NewProc("GetObjectW")
+	procCreateWindowExW            = user32.NewProc("CreateWindowExW")
+	procDefWindowProcW             = user32.NewProc("DefWindowProcW")
+	procRegisterClassExW           = user32.NewProc("RegisterClassExW")
+	procShowWindow                 = user32.NewProc("ShowWindow")
+	procUpdateWindow               = user32.NewProc("UpdateWindow")
+	procGetMessageW                = user32.NewProc("GetMessageW")
+	procTranslateMessage           = user32.NewProc("TranslateMessage")
+	procDispatchMessageW           = user32.NewProc("DispatchMessageW")
+	procPostQuitMessage            = user32.NewProc("PostQuitMessage")
+	procSendMessageW               = user32.NewProc("SendMessageW")
+	procGetWindowTextLengthW       = user32.NewProc("GetWindowTextLengthW")
+	procGetWindowTextW             = user32.NewProc("GetWindowTextW")
+	procMessageBoxW                = user32.NewProc("MessageBoxW")
+	procGetModuleHandleW           = kernel32.NewProc("GetModuleHandleW")
+	procCreateFontW                = gdi32.NewProc("CreateFontW")
+	procGetOpenFileNameW           = comdlg32.NewProc("GetOpenFileNameW")
+	procSetCursorPos               = user32.NewProc("SetCursorPos")
+	procGetCursorPos               = user32.NewProc("GetCursorPos")
+	procGetAsyncKeyState           = user32.NewProc("GetAsyncKeyState")
+	procMouseEvent                 = user32.NewProc("mouse_event")
+	procLoadImageW                 = user32.NewProc("LoadImageW")
+	procSetWindowPos               = user32.NewProc("SetWindowPos")
+	procInvalidateRect             = user32.NewProc("InvalidateRect")
+	procGetClientRect              = user32.NewProc("GetClientRect")
+	procClientToScreen             = user32.NewProc("ClientToScreen")
+	procDeleteObject               = gdi32.NewProc("DeleteObject")
+	procCreatePen                  = gdi32.NewProc("CreatePen")
+	procCreateSolidBrush           = gdi32.NewProc("CreateSolidBrush")
+	procSelectObject               = gdi32.NewProc("SelectObject")
+	procRectangle                  = gdi32.NewProc("Rectangle")
+	procBeginPaint                 = user32.NewProc("BeginPaint")
+	procEndPaint                   = user32.NewProc("EndPaint")
+	procFillRect                   = user32.NewProc("FillRect")
+	procDestroyWindow              = user32.NewProc("DestroyWindow")
+	procGetSystemMetrics           = user32.NewProc("GetSystemMetrics")
+	procSetTimer                   = user32.NewProc("SetTimer")
+	procKillTimer                  = user32.NewProc("KillTimer")
+	procSetTextColor               = gdi32.NewProc("SetTextColor")
+	procTextOut                    = gdi32.NewProc("TextOutW")
+	procCreateCompatibleDC         = gdi32.NewProc("CreateCompatibleDC")
+	procGetStockObject             = gdi32.NewProc("GetStockObject")
+	procDeleteDC                   = gdi32.NewProc("DeleteDC")
+	procBitBlt                     = gdi32.NewProc("BitBlt")
+	procGetDC                      = user32.NewProc("GetDC")
+	procReleaseDC                  = user32.NewProc("ReleaseDC")
+	procCreateCompatibleBitmap     = gdi32.NewProc("CreateCompatibleBitmap")
+	procGetDesktopWindow           = user32.NewProc("GetDesktopWindow")
+	procStretchBlt                 = gdi32.NewProc("StretchBlt")
+	procGetObject                  = gdi32.NewProc("GetObjectW")
 	procSetLayeredWindowAttributes = user32.NewProc("SetLayeredWindowAttributes")
-	procScreenToClient       = user32.NewProc("ScreenToClient")
-	procSetForegroundWindow  = user32.NewProc("SetForegroundWindow")
-	procSetBkMode            = gdi32.NewProc("SetBkMode")
+	procScreenToClient             = user32.NewProc("ScreenToClient")
+	procSetForegroundWindow        = user32.NewProc("SetForegroundWindow")
+	procSetBkMode                  = gdi32.NewProc("SetBkMode")
 )
 
 const (
-	WS_OVERLAPPEDWINDOW = 0x00CF0000
-	WS_VISIBLE          = 0x10000000
-	WS_CHILD            = 0x40000000
-	WS_BORDER           = 0x00800000
-	WS_TABSTOP          = 0x00010000
-	WS_POPUP            = 0x80000000
-	ES_AUTOHSCROLL      = 0x0080
-	ES_CENTER           = 0x0001
-	BS_PUSHBUTTON       = 0x00000000
-	BS_GROUPBOX         = 0x00000007
-	SS_BITMAP           = 0x0000000E
-	SS_CENTERIMAGE      = 0x00000800
-	WM_DESTROY          = 0x0002
-	WM_COMMAND          = 0x0111
-	WM_SETFONT          = 0x0030
-	WM_SETTEXT          = 0x000C
-	WM_GETTEXT          = 0x000D
-	WM_GETTEXTLENGTH    = 0x000E
-	WM_PAINT            = 0x000F
-	WM_ERASEBKGND       = 0x0014
-	WM_KEYDOWN          = 0x0100
-	WM_TIMER            = 0x0113
-	WM_USER             = 0x0400
-	WM_APP              = 0x8000
-	SW_SHOW             = 5
-	SW_HIDE             = 0
-	MB_OK               = 0x00000000
-	MB_ICONWARNING      = 0x00000030
-	MB_ICONERROR        = 0x00000010
-	MB_ICONINFORMATION  = 0x00000040
+	WS_OVERLAPPEDWINDOW  = 0x00CF0000
+	WS_VISIBLE           = 0x10000000
+	WS_CHILD             = 0x40000000
+	WS_BORDER            = 0x00800000
+	WS_TABSTOP           = 0x00010000
+	WS_POPUP             = 0x80000000
+	ES_AUTOHSCROLL       = 0x0080
+	ES_CENTER            = 0x0001
+	BS_PUSHBUTTON        = 0x00000000
+	BS_GROUPBOX          = 0x00000007
+	SS_BITMAP            = 0x0000000E
+	SS_CENTERIMAGE       = 0x00000800
+	WM_DESTROY           = 0x0002
+	WM_COMMAND           = 0x0111
+	WM_SETFONT           = 0x0030
+	WM_SETTEXT           = 0x000C
+	WM_GETTEXT           = 0x000D
+	WM_GETTEXTLENGTH     = 0x000E
+	WM_PAINT             = 0x000F
+	WM_ERASEBKGND        = 0x0014
+	WM_KEYDOWN           = 0x0100
+	WM_TIMER             = 0x0113
+	WM_USER              = 0x0400
+	WM_APP               = 0x8000
+	SW_SHOW              = 5
+	SW_HIDE              = 0
+	MB_OK                = 0x00000000
+	MB_ICONWARNING       = 0x00000030
+	MB_ICONERROR         = 0x00000010
+	MB_ICONINFORMATION   = 0x00000040
 	MOUSEEVENTF_LEFTDOWN = 0x0002
 	MOUSEEVENTF_LEFTUP   = 0x0004
-	VK_OEM_PLUS         = 0xBB
-	VK_OEM_MINUS        = 0xBD
-	VK_NUMPAD_ADD       = 0x6B
-	VK_NUMPAD_SUBTRACT  = 0x6D
-	VK_ESCAPE           = 0x1B
-	VK_RETURN           = 0x0D
-	VK_LBUTTON          = 0x01
-	CW_USEDEFAULT       = 0x80000000
-	OFN_FILEMUSTEXIST   = 0x00001000
-	OFN_HIDEREADONLY    = 0x00000004
-	OFN_EXPLORER        = 0x00080000
-	PBM_SETRANGE32      = 0x0401
-	PBM_SETPOS          = 0x0402
-	CS_HREDRAW          = 0x0002
-	CS_VREDRAW          = 0x0001
-	COLOR_WINDOW        = 5
-	STM_SETIMAGE        = 0x0172
-	IMAGE_BITMAP        = 0
-	LR_LOADFROMFILE     = 0x00000010
-	LR_CREATEDIBSECTION = 0x00002000
-	PS_SOLID            = 0
-	DEFAULT_CHARSET     = 1
-	OUTLINE_FONTTYPE    = 0
-	CLIP_DEFAULT_PRECIS = 0
-	DEFAULT_QUALITY     = 0
-	DEFAULT_PITCH       = 0
-	FF_DONTCARE         = 0
-	WS_EX_TOPMOST       = 0x00000008
-	WS_EX_LAYERED       = 0x00080000
-	LWA_COLORKEY        = 0x00000001
-	LWA_ALPHA           = 0x00000002
-	SRCCOPY             = 0x00CC0020
-	TRANSPARENT         = 1
+	VK_OEM_PLUS          = 0xBB
+	VK_OEM_MINUS         = 0xBD
+	VK_NUMPAD_ADD        = 0x6B
+	VK_NUMPAD_SUBTRACT   = 0x6D
+	VK_ESCAPE            = 0x1B
+	VK_RETURN            = 0x0D
+	VK_LBUTTON           = 0x01
+	CW_USEDEFAULT        = 0x80000000
+	OFN_FILEMUSTEXIST    = 0x00001000
+	OFN_HIDEREADONLY     = 0x00000004
+	OFN_EXPLORER         = 0x00080000
+	PBM_SETRANGE32       = 0x0401
+	PBM_SETPOS           = 0x0402
+	CS_HREDRAW           = 0x0002
+	CS_VREDRAW           = 0x0001
+	COLOR_WINDOW         = 5
+	STM_SETIMAGE         = 0x0172
+	IMAGE_BITMAP         = 0
+	LR_LOADFROMFILE      = 0x00000010
+	LR_CREATEDIBSECTION  = 0x00002000
+	PS_SOLID             = 0
+	DEFAULT_CHARSET      = 1
+	OUTLINE_FONTTYPE     = 0
+	CLIP_DEFAULT_PRECIS  = 0
+	DEFAULT_QUALITY      = 0
+	DEFAULT_PITCH        = 0
+	FF_DONTCARE          = 0
+	WS_EX_TOPMOST        = 0x00000008
+	WS_EX_LAYERED        = 0x00080000
+	LWA_COLORKEY         = 0x00000001
+	LWA_ALPHA            = 0x00000002
+	SRCCOPY              = 0x00CC0020
+	TRANSPARENT          = 1
 
 	TRANSPARENT_COLOR = 0x00FF00FF
 )
@@ -244,10 +246,10 @@ var (
 	timerProcess uintptr = 2
 	timerSel     uintptr = 3
 
-	drawState      int = 0
-	drawPathsCopy  []Path
-	drawCurSpeed   float64
-	drawCurPause   float64
+	drawState     int = 0
+	drawPathsCopy []Path
+	drawCurSpeed  float64
+	drawCurPause  float64
 
 	selState   int = 0
 	selStartPt POINT
@@ -268,7 +270,10 @@ type Pt struct{ X, Y int }
 type Path []Pt
 
 func utf16Ptr(s string) *uint16 {
-	p, _ := syscall.UTF16PtrFromString(s)
+	p, err := syscall.UTF16PtrFromString(s)
+	if err != nil {
+		return nil
+	}
 	return p
 }
 
@@ -306,34 +311,15 @@ func setProgress(cur, total int) {
 }
 
 func parseInt(s string, def int) int {
-	n := 0
-	for _, c := range strings.TrimSpace(s) {
-		if c >= '0' && c <= '9' {
-			n = n*10 + int(c-'0')
-		} else {
-			return def
-		}
+	if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+		return n
 	}
-	if n == 0 {
-		return def
-	}
-	return n
+	return def
 }
 
 func parseFloat(s string, def float64) float64 {
-	n, dot, div := 0, false, 1.0
-	for _, c := range strings.TrimSpace(s) {
-		if c >= '0' && c <= '9' {
-			if dot {
-				div *= 10
-			}
-			n = n*10 + int(c-'0')
-		} else if c == '.' {
-			dot = true
-		}
-	}
-	if v := float64(n) / div; v > 0 {
-		return v
+	if n, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+		return n
 	}
 	return def
 }
@@ -355,11 +341,18 @@ func openFileDlg(title, filter string) string {
 	return syscall.UTF16ToString(buf)
 }
 
-func setCursorPos(x, y int)    { procSetCursorPos.Call(uintptr(x), uintptr(y)) }
-func getCursorPos() (int, int) { var p POINT; procGetCursorPos.Call(uintptr(unsafe.Pointer(&p))); return int(p.X), int(p.Y) }
-func mouseDown()               { procMouseEvent.Call(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0) }
-func mouseUp()                 { procMouseEvent.Call(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0) }
-func isKeyDown(vk uint16) bool { ret, _, _ := procGetAsyncKeyState.Call(uintptr(vk)); return ret&0x8000 != 0 }
+func setCursorPos(x, y int) { procSetCursorPos.Call(uintptr(x), uintptr(y)) }
+func getCursorPos() (int, int) {
+	var p POINT
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&p)))
+	return int(p.X), int(p.Y)
+}
+func mouseDown() { procMouseEvent.Call(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0) }
+func mouseUp()   { procMouseEvent.Call(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0) }
+func isKeyDown(vk uint16) bool {
+	ret, _, _ := procGetAsyncKeyState.Call(uintptr(vk))
+	return ret&0x8000 != 0
+}
 
 type ImageProcessor struct {
 	W, H  int
@@ -375,8 +368,13 @@ func LoadImage(path string) (*ImageProcessor, error) {
 	defer f.Close()
 
 	header := make([]byte, 512)
-	n, _ := f.Read(header)
-	f.Seek(0, 0)
+	n, err := f.Read(header)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	if _, err := f.Seek(0, 0); err != nil {
+		return nil, err
+	}
 
 	var img image.Image
 	var decodeErr error
@@ -637,7 +635,9 @@ func SavePreviewBMP(paths []Path, w, h, pw, ph int, outPath string) error {
 		}
 	}
 
-	f.Write(header)
+	if _, err := f.Write(header); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -780,6 +780,23 @@ func doDrawing() {
 	setProgress(total, total)
 }
 
+func processCurrentImage(hwnd uintptr) {
+	blur := parseInt(getEditText(hEditBlur), 5)
+	if blur%2 == 0 {
+		blur++
+	}
+	thresh := parseInt(getEditText(hEditThreshold), 100)
+	minLen := parseInt(getEditText(hEditMinLen), 30)
+	simplify := parseFloat(getEditText(hEditSimplify), 2.0)
+
+	previewPath := filepath.Join(os.TempDir(), "draw_preview.bmp")
+
+	setStatus("正在解析图片...")
+
+	go doProcessAsync(imagePath, previewPath, blur, thresh, minLen, simplify)
+	procSetTimer.Call(hwnd, timerProcess, 100, 0)
+}
+
 func doStart() {
 	if len(paths) == 0 {
 		msgBox("提示", "没有可绘制的路径，请先解析图片", MB_OK|MB_ICONWARNING)
@@ -810,11 +827,11 @@ func selWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 	switch msg {
 	case WM_PAINT:
 		var ps struct {
-			hdc        uintptr
-			fErase     int32
-			rcPaint    RECT
-			fRestore   int32
-			fIncUpdate int32
+			hdc         uintptr
+			fErase      int32
+			rcPaint     RECT
+			fRestore    int32
+			fIncUpdate  int32
 			rgbReserved [32]byte
 		}
 		procBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
@@ -839,8 +856,12 @@ func selWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			x2 := int(selEndPt.X)
 			y2 := int(selEndPt.Y)
 
-			if x1 > x2 { x1, x2 = x2, x1 }
-			if y1 > y2 { y1, y2 = y2, y1 }
+			if x1 > x2 {
+				x1, x2 = x2, x1
+			}
+			if y1 > y2 {
+				y1, y2 = y2, y1
+			}
 
 			selW := x2 - x1
 			selH := y2 - y1
@@ -1075,41 +1096,14 @@ func wndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			if path := openFileDlg("选择图片", filter); path != "" {
 				imagePath = path
 				setStatus("已选择: " + path)
-
-				blur := parseInt(getEditText(hEditBlur), 5)
-				if blur%2 == 0 {
-					blur++
-				}
-				thresh := parseInt(getEditText(hEditThreshold), 100)
-				minLen := parseInt(getEditText(hEditMinLen), 30)
-				simplify := parseFloat(getEditText(hEditSimplify), 2.0)
-
-				previewPath := os.TempDir() + "\\draw_preview.bmp"
-
-				setStatus("正在解析图片...")
-
-				go doProcessAsync(imagePath, previewPath, blur, thresh, minLen, simplify)
-				procSetTimer.Call(hwnd, timerProcess, 100, 0)
+				processCurrentImage(hwnd)
 			}
 		case 2:
 			if imagePath == "" {
 				msgBox("提示", "请先选择图片", MB_OK|MB_ICONWARNING)
 				return 0
 			}
-			blur := parseInt(getEditText(hEditBlur), 5)
-			if blur%2 == 0 {
-				blur++
-			}
-			thresh := parseInt(getEditText(hEditThreshold), 100)
-			minLen := parseInt(getEditText(hEditMinLen), 30)
-			simplify := parseFloat(getEditText(hEditSimplify), 2.0)
-
-			previewPath := os.TempDir() + "\\draw_preview.bmp"
-
-			setStatus("正在解析图片...")
-
-			go doProcessAsync(imagePath, previewPath, blur, thresh, minLen, simplify)
-			procSetTimer.Call(hwnd, timerProcess, 100, 0)
+			processCurrentImage(hwnd)
 
 		case 3:
 			if len(paths) == 0 {
