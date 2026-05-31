@@ -248,6 +248,7 @@ var (
 	timerDraw    uintptr = 1
 	timerProcess uintptr = 2
 	timerSel     uintptr = 3
+	timerUIUpdate uintptr = 4
 
 	drawState     int = 0
 	drawPathsCopy []Path
@@ -267,6 +268,10 @@ var (
 
 	processResultChan chan ProcessResult
 	processStartTime  time.Time
+	
+	// UI更新相关的全局变量
+	pendingProcessResult *ProcessResult
+	uiUpdatePending bool
 )
 
 type Pt struct{ X, Y int }
@@ -1051,44 +1056,54 @@ func finishSelection() {
 		canvasBR.X-canvasTL.X, canvasBR.Y-canvasTL.Y))
 }
 
-func handleProcessResultAsync(result ProcessResult) {
-	go func() {
-		time.Sleep(10 * time.Millisecond)
-
-		paths = result.paths
-		imgW, imgH = result.imgW, imgH
-		previewBMP = result.previewBMP
-
-		var newBMP uintptr = 0
-		if previewBMP != "" {
-			newBMP, _, _ = procLoadImageW.Call(0, uintptr(unsafe.Pointer(utf16Ptr(previewBMP))), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE|LR_CREATEDIBSECTION)
-		}
-
-		if hPreviewBMP != 0 {
-			procDeleteObject.Call(hPreviewBMP)
-			hPreviewBMP = 0
-		}
-
-		if newBMP != 0 {
-			hPreviewBMP = newBMP
-			procSendMessageW.Call(hPreview, STM_SETIMAGE, IMAGE_BITMAP, newBMP)
-		}
-
-		setStatus(fmt.Sprintf("解析完成，共 %d 条路径 | 图片: %dx%d", len(paths), imgW, imgH))
-		setProgress(0, 1)
-
-		procInvalidateRect.Call(hMainWnd, 0, 1)
-		procUpdateWindow.Call(hMainWnd)
-	}()
-}
-
 func handleProcessResult(result ProcessResult) {
 	if result.err != nil {
 		setStatus(fmt.Sprintf("解析失败: %v", result.err))
 		return
 	}
+	
+	// 保存结果到全局变量
+	pendingProcessResult = &result
+	uiUpdatePending = true
+	
+	// 设置定时器，在主线程中更新UI
+	procSetTimer.Call(hMainWnd, timerUIUpdate, 30, 0)
+}
 
-	handleProcessResultAsync(result)
+// 在主线程中处理UI更新
+func processUIPendingUpdate() {
+	if !uiUpdatePending || pendingProcessResult == nil {
+		return
+	}
+	
+	result := pendingProcessResult
+	uiUpdatePending = false
+	pendingProcessResult = nil
+	
+	paths = result.paths
+	imgW, imgH = result.imgW, imgH
+	previewBMP = result.previewBMP
+
+	var newBMP uintptr = 0
+	if previewBMP != "" {
+		newBMP, _, _ = procLoadImageW.Call(0, uintptr(unsafe.Pointer(utf16Ptr(previewBMP))), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE|LR_CREATEDIBSECTION)
+	}
+
+	if hPreviewBMP != 0 {
+		procDeleteObject.Call(hPreviewBMP)
+		hPreviewBMP = 0
+	}
+
+	if newBMP != 0 {
+		hPreviewBMP = newBMP
+		procPostMessageW.Call(hPreview, STM_SETIMAGE, IMAGE_BITMAP, newBMP)
+	}
+
+	setStatus(fmt.Sprintf("解析完成，共 %d 条路径 | 图片: %dx%d", len(paths), imgW, imgH))
+	setProgress(0, 1)
+
+	procInvalidateRect.Call(hMainWnd, 0, 1)
+	procUpdateWindow.Call(hMainWnd)
 }
 
 func wndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
@@ -1110,6 +1125,9 @@ func wndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 				procKillTimer.Call(hwnd, timerProcess)
 			default:
 			}
+		case timerUIUpdate:
+			procKillTimer.Call(hwnd, timerUIUpdate)
+			processUIPendingUpdate()
 		}
 
 	case WM_COMMAND:
