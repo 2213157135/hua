@@ -301,7 +301,7 @@ func msgBox(title, msg string, style uintptr) int {
 
 func setStatus(msg string) {
 	if hEditStatus != 0 {
-		setEditText(hEditStatus, msg)
+		procPostMessageW.Call(hEditStatus, WM_SETTEXT, 0, uintptr(unsafe.Pointer(utf16Ptr(msg))))
 	}
 }
 
@@ -309,8 +309,8 @@ func setProgress(cur, total int) {
 	if total <= 0 {
 		return
 	}
-	procSendMessageW.Call(hProgress, PBM_SETRANGE32, 0, uintptr(total))
-	procSendMessageW.Call(hProgress, PBM_SETPOS, 0, uintptr(cur))
+	procPostMessageW.Call(hProgress, PBM_SETRANGE32, 0, uintptr(total))
+	procPostMessageW.Call(hProgress, PBM_SETPOS, 0, uintptr(cur))
 }
 
 func parseInt(s string, def int) int {
