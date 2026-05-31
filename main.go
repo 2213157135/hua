@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"image"
@@ -265,7 +264,7 @@ var (
 	hPreviewBMP uintptr
 
 	processResultChan chan ProcessResult
-	processStartTime  time.Time // 记录处理开始时间，用于超时判断
+	processStartTime  time.Time // 用于超时判断
 )
 
 type Pt struct{ X, Y int }
@@ -363,33 +362,36 @@ type ImageProcessor struct {
 }
 
 func LoadImage(path string) (*ImageProcessor, error) {
-	// 先读取整个文件到内存，避免多次seek导致的问题
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	header := make([]byte, 512)
+	n, err := f.Read(header)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	if _, err := f.Seek(0, 0); err != nil {
 		return nil, err
 	}
 
 	var img image.Image
 	var decodeErr error
 
-	n := len(data)
-	if n < 2 {
-		return nil, fmt.Errorf("文件太小")
-	}
-
-	// 根据文件头判断格式
-	if n >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
-		img, decodeErr = jpeg.Decode(bytes.NewReader(data))
-	} else if n >= 8 && string(data[0:8]) == "\x89PNG\r\n\x1a\n" {
-		img, decodeErr = png.Decode(bytes.NewReader(data))
-	} else if n >= 6 && (string(data[0:6]) == "GIF87a" || string(data[0:6]) == "GIF89a") {
-		img, decodeErr = gif.Decode(bytes.NewReader(data))
-	} else if n >= 2 && data[0] == 'B' && data[1] == 'M' {
-		img, decodeErr = decodeBMP(bytes.NewReader(data))
-	} else if n >= 12 && string(data[0:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
-		img, decodeErr = webpDecode(bytes.NewReader(data))
+	if n >= 2 && header[0] == 0xFF && header[1] == 0xD8 {
+		img, decodeErr = jpeg.Decode(f)
+	} else if n >= 8 && string(header[0:8]) == "\x89PNG\r\n\x1a\n" {
+		img, decodeErr = png.Decode(f)
+	} else if n >= 6 && (string(header[0:6]) == "GIF87a" || string(header[0:6]) == "GIF89a") {
+		img, decodeErr = gif.Decode(f)
+	} else if n >= 2 && header[0] == 'B' && header[1] == 'M' {
+		img, decodeErr = decodeBMP(f)
+	} else if n >= 12 && string(header[0:4]) == "RIFF" && string(header[8:12]) == "WEBP" {
+		img, decodeErr = webpDecode(f)
 	} else {
-		img, _, decodeErr = image.Decode(bytes.NewReader(data))
+		img, _, decodeErr = image.Decode(f)
 	}
 
 	if decodeErr != nil {
@@ -710,11 +712,11 @@ func ProcessImage(imgPath string, blur, thresh, minLen int, simplify float64) ([
 }
 
 func doProcessAsync(path, previewPath string, blur, thresh, minLen int, simplify float64) {
-	// 确保即使panic也能恢复，不会导致整个程序崩溃
+	// 添加 panic 恢复，防止单个任务导致程序崩溃
 	defer func() {
 		if r := recover(); r != nil {
 			result := ProcessResult{
-				err: fmt.Errorf("处理时发生错误: %v", r),
+				err: fmt.Errorf("处理图片时发生错误: %v", r),
 			}
 			select {
 			case processResultChan <- result:
@@ -742,7 +744,6 @@ func doProcessAsync(path, previewPath string, blur, thresh, minLen int, simplify
 	select {
 	case processResultChan <- result:
 	default:
-		// 通道满了，丢弃结果
 	}
 }
 
