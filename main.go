@@ -84,7 +84,7 @@ var (
 )
 
 const (
-	APP_VERSION = "v1.0.12"
+	APP_VERSION = "v1.0.13"
 	WS_OVERLAPPEDWINDOW  = 0x00CF0000
 	WS_VISIBLE           = 0x10000000
 	WS_CHILD             = 0x40000000
@@ -1046,43 +1046,7 @@ func closeSelWindow() {
 	}
 }
 
-func onSelTimer() {
-	if hSelWnd == 0 {
-		procKillTimer.Call(hMainWnd, timerSel)
-		return
-	}
-	
-	switch selState {
-	case 0:
-		if isKeyDown(VK_ESCAPE) {
-			selState = -1
-			closeSelWindow()
-			setStatus("画布校准已取消")
-			return
-		}
-		if ret, _, _ := procGetAsyncKeyState.Call(uintptr(VK_LBUTTON)); ret&0x8000 != 0 {
-			x, y := getCursorPos()
-			selStartPt = POINT{X: int32(x), Y: int32(y)}
-			selEndPt = selStartPt
-			selState = 1
-		}
 
-	case 1:
-		if isKeyDown(VK_ESCAPE) {
-			selState = -1
-			closeSelWindow()
-			setStatus("画布校准已取消")
-			return
-		}
-		x, y := getCursorPos()
-		if selEndPt.X != int32(x) || selEndPt.Y != int32(y) {
-			selEndPt = POINT{X: int32(x), Y: int32(y)}
-			if hSelWnd != 0 {
-				procInvalidateRect.Call(hSelWnd, 0, 1)
-			}
-		}
-	}
-}
 
 func finishSelection() {
 	tl := selStartPt
@@ -1162,8 +1126,6 @@ func wndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 	switch msg {
 	case WM_TIMER:
 		switch wp {
-		case timerSel:
-			onSelTimer()
 		case timerProcess:
 			if time.Since(processStartTime) > 30*time.Second {
 				procKillTimer.Call(hwnd, timerProcess)
@@ -1207,7 +1169,6 @@ func wndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			}
 			selState = 0
 			openSelWindow()
-			procSetTimer.Call(hwnd, timerSel, 50, 0)
 			setStatus("拖动鼠标框选绘画区域 | 松开鼠标确认 | 按 Esc 取消")
 		case 4:
 			doStart()
@@ -1220,7 +1181,6 @@ func wndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		}
 
 	case WM_DESTROY:
-		procKillTimer.Call(hwnd, timerSel)
 		procKillTimer.Call(hwnd, timerProcess)
 		if hPreviewBMP != 0 {
 			procDeleteObject.Call(hPreviewBMP)
