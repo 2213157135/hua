@@ -918,7 +918,9 @@ func selWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			sizeText := fmt.Sprintf("%d x %d", selW, selH)
 			procSetBkMode.Call(hdc, TRANSPARENT)
 			procSetTextColor.Call(hdc, 0x00000000)
-			procTextOut.Call(hdc, uintptr(x1+5), uintptr(y1+5), uintptr(unsafe.Pointer(utf16Ptr(sizeText))))
+			textUTF16 := syscall.StringToUTF16(sizeText)
+			textLen := len(textUTF16) - 1
+			procTextOut.Call(hdc, uintptr(x1+5), uintptr(y1+5), uintptr(unsafe.Pointer(&textUTF16[0])), uintptr(textLen))
 		}
 
 		procEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
