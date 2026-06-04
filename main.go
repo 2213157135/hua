@@ -84,7 +84,7 @@ var (
 )
 
 const (
-	APP_VERSION = "v1.0.9"
+	APP_VERSION = "v1.0.10"
 	WS_OVERLAPPEDWINDOW  = 0x00CF0000
 	WS_VISIBLE           = 0x10000000
 	WS_CHILD             = 0x40000000
@@ -270,8 +270,8 @@ var (
 	processResultChan chan ProcessResult
 	processStartTime  time.Time
 	
-	// UI更新相关的全局变量
-	pendingProcessResult *ProcessResult
+	// UI更新相关的全局变量 - 使用值类型避免悬空指针
+	pendingProcessResult ProcessResult
 	uiUpdatePending bool
 )
 
@@ -1065,14 +1065,8 @@ func handleProcessResult(result ProcessResult) {
 		return
 	}
 	
-	// 保存结果到全局变量 - 创建新的堆上分配的副本
-	pendingProcessResult = &ProcessResult{
-		paths:      result.paths,
-		imgW:       result.imgW,
-		imgH:       result.imgH,
-		previewBMP: result.previewBMP,
-		err:        result.err,
-	}
+	// 保存结果到全局变量 - 使用值类型
+	pendingProcessResult = result
 	uiUpdatePending = true
 	
 	// 设置定时器，在主线程中更新UI
@@ -1081,13 +1075,13 @@ func handleProcessResult(result ProcessResult) {
 
 // 在主线程中处理UI更新
 func processUIPendingUpdate() {
-	if !uiUpdatePending || pendingProcessResult == nil {
+	if !uiUpdatePending {
 		return
 	}
 	
 	result := pendingProcessResult
 	uiUpdatePending = false
-	pendingProcessResult = nil
+	pendingProcessResult = ProcessResult{}
 	
 	paths = result.paths
 	imgW, imgH = result.imgW, result.imgH
@@ -1234,7 +1228,7 @@ func WinMain(hInst uintptr) int {
 	}
 	procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 
-	hMainWnd = createWnd(0, "DrawAssistant_v12", "你画我猜 - 辅助绘画工具 " + APP_VERSION, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 560, 0, 0, hInst)
+	hMainWnd = createWnd(0, "DrawAssistant_v12", "你画我猜 - 辅助绘画工具", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 560, 0, 0, hInst)
 
 	createGroup("参数设置", 10, 10, 240, 290, hMainWnd)
 	createLabel("边缘阈值 (0-255):", 22, 38, 110, 20, hMainWnd)
