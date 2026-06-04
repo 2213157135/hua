@@ -84,7 +84,7 @@ var (
 )
 
 const (
-	APP_VERSION = "v1.0.10"
+	APP_VERSION = "v1.0.11"
 	WS_OVERLAPPEDWINDOW  = 0x00CF0000
 	WS_VISIBLE           = 0x10000000
 	WS_CHILD             = 0x40000000
@@ -106,6 +106,9 @@ const (
 	WM_PAINT             = 0x000F
 	WM_ERASEBKGND        = 0x0014
 	WM_KEYDOWN           = 0x0100
+	WM_LBUTTONDOWN       = 0x0201
+	WM_LBUTTONUP         = 0x0202
+	WM_MOUSEMOVE         = 0x0200
 	WM_TIMER             = 0x0113
 	WM_USER              = 0x0400
 	WM_APP               = 0x8000
@@ -146,6 +149,7 @@ const (
 	FF_DONTCARE          = 0
 	WS_EX_TOPMOST        = 0x00000008
 	WS_EX_LAYERED        = 0x00080000
+	WS_EX_TRANSPARENT    = 0x00000020
 	LWA_COLORKEY         = 0x00000001
 	LWA_ALPHA            = 0x00000002
 	SRCCOPY              = 0x00CC0020
@@ -865,7 +869,8 @@ func selWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		sxR, _, _ := procGetSystemMetrics.Call(0)
 		syR, _, _ := procGetSystemMetrics.Call(1)
 
-		brush, _, _ := procCreateSolidBrush.Call(TRANSPARENT_COLOR)
+		// 使用半透明背景而不是完全透明
+		brush, _, _ := procCreateSolidBrush.Call(0x00808080) // 灰色半透明
 		var rect RECT
 		rect.Right = int32(sxR)
 		rect.Bottom = int32(syR)
@@ -907,7 +912,7 @@ func selWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 				procDeleteDC.Call(memDC)
 			}
 
-			pen, _, _ := procCreatePen.Call(PS_SOLID, 3, 0x00FFFFFF)
+			pen, _, _ := procCreatePen.Call(PS_SOLID, 3, 0x00FF0000) // 使用红色而不是白色
 			oldPen, _, _ := procSelectObject.Call(hdc, pen)
 			nullBrush, _, _ := procGetStockObject.Call(5)
 			oldBrush, _, _ := procSelectObject.Call(hdc, nullBrush)
@@ -918,7 +923,7 @@ func selWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 
 			sizeText := fmt.Sprintf("%d x %d", selW, selH)
 			procSetBkMode.Call(hdc, TRANSPARENT)
-			procSetTextColor.Call(hdc, 0x00000000)
+			procSetTextColor.Call(hdc, 0x00FFFFFF) // 使用白色文本
 			textUTF16 := syscall.StringToUTF16(sizeText)
 			textLen := len(textUTF16) - 1
 			procTextOut.Call(hdc, uintptr(x1+5), uintptr(y1+5), uintptr(unsafe.Pointer(&textUTF16[0])), uintptr(textLen))
@@ -944,6 +949,48 @@ func selWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			finishSelection()
 			return 0
 		}
+	case WM_LBUTTONDOWN:
+		// 鼠标按下，开始选择
+		x := int(int16(lp & 0xFFFF))
+		y := int(int16((lp >> 16) & 0xFFFF))
+		// 将客户区坐标转换为屏幕坐标
+		var pt POINT
+		pt.X = int32(x)
+		pt.Y = int32(y)
+		procClientToScreen.Call(hwnd, uintptr(unsafe.Pointer(&pt)))
+		selStartPt = pt
+		selEndPt = pt
+		selState = 1
+		return 0
+	case WM_MOUSEMOVE:
+		if selState == 1 {
+			x := int(int16(lp & 0xFFFF))
+			y := int(int16((lp >> 16) & 0xFFFF))
+			var pt POINT
+			pt.X = int32(x)
+			pt.Y = int32(y)
+			procClientToScreen.Call(hwnd, uintptr(unsafe.Pointer(&pt)))
+			if selEndPt.X != pt.X || selEndPt.Y != pt.Y {
+				selEndPt = pt
+				procInvalidateRect.Call(hwnd, 0, 1)
+			}
+		}
+		return 0
+	case WM_LBUTTONUP:
+		if selState == 1 {
+			x := int(int16(lp & 0xFFFF))
+			y := int(int16((lp >> 16) & 0xFFFF))
+			var pt POINT
+			pt.X = int32(x)
+			pt.Y = int32(y)
+			procClientToScreen.Call(hwnd, uintptr(unsafe.Pointer(&pt)))
+			selEndPt = pt
+			// 直接结束选择，不需要再按Enter
+			procKillTimer.Call(hMainWnd, timerSel)
+			closeSelWindow()
+			finishSelection()
+		}
+		return 0
 	}
 
 	ret, _, _ := procDefWindowProcW.Call(hwnd, uintptr(msg), wp, lp)
@@ -954,7 +1001,7 @@ func openSelWindow() {
 	if !selRegistered {
 		wc := WNDCLASSEXW{
 			CbSize:        uint32(unsafe.Sizeof(WNDCLASSEXW{})),
-			Style:         0,
+			Style:         CS_HREDRAW | CS_VREDRAW,
 			LpfnWndProc:   syscall.NewCallback(selWndProc),
 			HInstance:     0,
 			HbrBackground: 0,
@@ -975,7 +1022,7 @@ func openSelWindow() {
 	syR, _, _ := procGetSystemMetrics.Call(1)
 
 	hSelWnd, _, _ = procCreateWindowExW.Call(
-		uintptr(WS_EX_LAYERED|WS_EX_TOPMOST),
+		uintptr(WS_EX_LAYERED|WS_EX_TOPMOST), // 移除WS_EX_TRANSPARENT，这样窗口可以接收鼠标事件
 		uintptr(unsafe.Pointer(utf16Ptr(selWndClass))),
 		uintptr(unsafe.Pointer(utf16Ptr("框选绘画区域"))),
 		uintptr(WS_POPUP|WS_VISIBLE),
@@ -988,7 +1035,8 @@ func openSelWindow() {
 		return
 	}
 
-	procSetLayeredWindowAttributes.Call(hSelWnd, TRANSPARENT_COLOR, 0, LWA_COLORKEY)
+	// 设置半透明效果而不是完全透明
+	procSetLayeredWindowAttributes.Call(hSelWnd, 0, 200, LWA_ALPHA) // 200表示80%不透明度
 	procShowWindow.Call(hSelWnd, SW_SHOW)
 	procSetForegroundWindow.Call(hSelWnd)
 }
@@ -1159,7 +1207,7 @@ func wndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			selState = 0
 			openSelWindow()
 			procSetTimer.Call(hwnd, timerSel, 50, 0)
-			setStatus("拖动鼠标框选绘画区域 | 按 Enter 确认 | 按 Esc 取消")
+			setStatus("拖动鼠标框选绘画区域 | 松开鼠标确认 | 按 Esc 取消")
 		case 4:
 			doStart()
 		case 5:
